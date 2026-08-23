@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Slowed & Reverb Bot with FFmpeg is alive!"
+    return "Slowed & Reverb Bot is alive!"
 
 def run_web():
     port = int(os.environ.get("PORT", 5000))
@@ -21,7 +21,7 @@ bot = telebot.TeleBot(TOKEN)
 def send_welcome(message):
     welcome_text = (
         "🎵 **Welcome to Slowed & Reverb Bot!**\n\n"
-        "🔗 Kisi bhi song ya video ka link bhejein, yeh bot uska audio download karke use **Slowed & Reverb** mein convert karke bhej dega."
+        "🔗 Kisi bhi song, video ya Instagram reel ka link bhejein, yeh bot uska audio download karke use **Slowed & Reverb** mein convert karke bhej dega."
     )
     bot.reply_to(message, welcome_text, parse_mode="Markdown")
 
@@ -35,7 +35,6 @@ def process_audio(message):
 
     msg = bot.reply_to(message, "🎧 Audio download aur Slowed & Reverb ho raha hai... Thoda waqt lag sakta hai.")
 
-    # Local ffmpeg path set karna zaroori hai agar current folder mein hai
     current_dir = os.getcwd()
     os.environ["PATH"] += os.pathsep + current_dir
 
@@ -51,8 +50,13 @@ def process_audio(message):
             '-af', 'asetrate=44100*0.85,aresample=44100,aecho=0.8:0.88:60:0.4'
         ],
         'noplaylist': True,
+        'socket_timeout': 30,
+        'geo_bypass': True,
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Sec-Fetch-Mode': 'navigate',
         }
     }
 
@@ -82,6 +86,6 @@ if __name__ == "__main__":
     t = threading.Thread(target=run_web)
     t.start()
     
-    print("Slowed & Reverb Bot with FFmpeg is running...")
+    print("Slowed & Reverb Bot is running...")
     bot.infinity_polling()
     
