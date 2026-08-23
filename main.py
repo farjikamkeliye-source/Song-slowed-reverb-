@@ -3,6 +3,7 @@ import threading
 from flask import Flask
 import telebot
 import yt_dlp
+from pydub import AudioSegment
 
 app = Flask(__name__)
 
@@ -25,6 +26,25 @@ def send_welcome(message):
     )
     bot.reply_to(message, welcome_text, parse_mode="Markdown")
 
+def make_slowed_reverb(input_path, output_path):
+    # Audio load karein
+    song = AudioSegment.from_file(input_path)
+    
+    # 1. Slowed effect: Frame rate ko kam karke pitch aur speed slow karna
+    new_sample_rate = int(song.frame_rate * 0.82) # 0.82 speed factor
+    slowed_song = song._spawn(song.raw_data, overrides={'frame_rate': new_sample_rate})
+    slowed_song = slowed_song.set_frame_rate(44100)
+    
+    # 2. Reverb / Echo effect: Audio ko thoda delay karke overlay karna
+    echo1 = slowed_song - 6  # Thoda low volume echo
+    echo2 = slowed_song - 12 # Aur kam volume echo
+    
+    # Mix song with echo delays
+    reverbed_song = slowed_song.overlay(echo1, position=100).overlay(echo2, position=250)
+    
+    # Export as mp3
+    reverbed_song.export(output_path, format="mp3")
+
 @bot.message_handler(func=lambda message: True)
 def process_audio(message):
     url = message.text.strip()
@@ -33,32 +53,27 @@ def process_audio(message):
         bot.reply_to(message, "❌ Kripya ek valid link bhejein.")
         return
 
-    msg = bot.reply_to(message, "🎧 Audio download aur Slowed & Reverb ho raha hai... Thoda waqt lag sakta hai.")
+    msg = bot.reply_to(message, "🎧 Audio download aur Slowed & Reverb process ho raha hai... Thoda waqt lag sakta hai.")
 
-    # yt-dlp ke sath ffmpeg audio filters use karenge
-    # atempo=0.85 (speed slow karne ke liye) aur aecho (reverb/echo effect ke liye)
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': 'input_audio.%(ext)s',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        'postprocessor_args': [
-            '-af', 'asetrate=44100*0.85,aresample=44100,aecho=0.8:0.88:60:0.4'
-        ],
+        'outtmpl': 'downloaded_song.%(ext)s',
         'noplaylist': True,
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         }
     }
 
-    output_file = "input_audio.mp3"
+    raw_file = None
+    output_file = "slowed_reverb_song.mp3"
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+            info = ydl.extract_info(url, download=True)
+            raw_file = ydl.prepare_filename(info)
+
+        # Python se audio ko Slowed & Reverb banayein
+        make_slowed_reverb(raw_file, output_file)
 
         if os.path.exists(output_file):
             with open(output_file, 'rb') as audio:
@@ -67,20 +82,24 @@ def process_audio(message):
         else:
             raise Exception("Audio process nahi ho payi.")
 
-        # Cleanup file
+        # Cleanup files
+        if os.path.exists(raw_file):
+            os.remove(raw_file)
         if os.path.exists(output_file):
             os.remove(output_file)
 
     except Exception as e:
         print(e)
+        if raw_file and os.path.exists(raw_file):
+            os.remove(raw_file)
         if os.path.exists(output_file):
             os.remove(output_file)
-        bot.edit_message_text(f"❌ Error: Server par ffmpeg missing ho sakta hai ya link support nahi kar raha.", message.chat.id, msg.message_id)
+        bot.edit_message_text(f"❌ Error: Link support nahi kar raha ya processing mein samasya aayi.", message.chat.id, msg.message_id)
 
 if __name__ == "__main__":
     t = threading.Thread(target=run_web)
     t.start()
     
-    print("Slowed & Reverb Bot is running...")
+    print("Slowed & Reverb Bot (Pure Python) is running...")
     bot.infinity_polling()
-  
+    
